@@ -1,0 +1,523 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  ADMIN
+  RETAILER_OWNER
+  RETAILER_STAFF
+  SUPPORT_OPERATOR
+}
+
+enum UserStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  INACTIVE
+}
+
+model User {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  password      String?
+  name          String
+  role          UserRole       @default(RETAILER_STAFF)
+  status        UserStatus     @default(PENDING)
+  googleId      String?        @unique
+  microsoftId   String?        @unique
+  retailerStaff RetailerStaff?
+  adminActions  AuditLog[]     @relation("AdminActions")
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([email])
+  @@index([role])
+  @@index([status])
+}
+
+enum RetailerStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+model Retailer {
+  id            String           @id @default(cuid())
+  businessName  String
+  tradingName   String?
+  companyNumber String?
+  vatNumber     String?
+  addressLine1  String
+  addressLine2  String?
+  city          String
+  postcode      String
+  country       String           @default("GB")
+  phone         String
+  email         String
+  status        RetailerStatus   @default(PENDING)
+  approvedAt    DateTime?
+  approvedBy    String?
+  outlets       RetailerOutlet[]
+  wallet        Wallet?
+  transactions  Transaction[]
+  auditLogs     AuditLog[]
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@index([status])
+  @@index([businessName])
+}
+
+model RetailerOutlet {
+  id           String           @id @default(cuid())
+  retailerId   String
+  name         String
+  addressLine1 String
+  city         String
+  postcode     String
+  phone        String?
+  isActive     Boolean          @default(true)
+  retailer     Retailer         @relation(fields: [retailerId], references: [id], onDelete: Cascade)
+  staff        RetailerStaff[]
+  terminals    TerminalDevice[]
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@index([retailerId])
+}
+
+model RetailerStaff {
+  id        String         @id @default(cuid())
+  userId    String         @unique
+  outletId  String
+  pin       String?
+  isActive  Boolean        @default(true)
+  canSell   Boolean        @default(true)
+  canRefund Boolean        @default(false)
+  canTopUp  Boolean        @default(false)
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  outlet    RetailerOutlet @relation(fields: [outletId], references: [id], onDelete: Cascade)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@index([outletId])
+}
+
+model TerminalDevice {
+  id         String         @id @default(cuid())
+  outletId   String
+  deviceId   String         @unique
+  name       String
+  isActive   Boolean        @default(true)
+  lastSeenAt DateTime?
+  pairedAt   DateTime       @default(now())
+  outlet     RetailerOutlet @relation(fields: [outletId], references: [id], onDelete: Cascade)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  @@index([outletId])
+  @@index([deviceId])
+}
+
+enum WalletLedgerType {
+  CREDIT
+  DEBIT
+  HOLD
+  CAPTURE
+  RELEASE
+  REFUND
+}
+
+enum WalletLedgerStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REVERSED
+}
+
+model Wallet {
+  id         String         @id @default(cuid())
+  retailerId String         @unique
+  balance    Decimal        @default(0) @db.Decimal(10, 2)
+  holdAmount Decimal        @default(0) @db.Decimal(10, 2)
+  currency   String         @default("GBP")
+  isActive   Boolean        @default(true)
+  retailer   Retailer       @relation(fields: [retailerId], references: [id], onDelete: Cascade)
+  ledger     WalletLedger[]
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+}
+
+model WalletLedger {
+  id            String             @id @default(cuid())
+  walletId      String
+  type          WalletLedgerType
+  status        WalletLedgerStatus @default(COMPLETED)
+  amount        Decimal            @db.Decimal(10, 2)
+  balanceBefore Decimal            @db.Decimal(10, 2)
+  balanceAfter  Decimal            @db.Decimal(10, 2)
+  transactionId String?
+  reference     String?
+  metadata      Json?
+  wallet        Wallet             @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  createdAt     DateTime           @default(now())
+
+  @@index([walletId])
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
+}
+
+enum ProductStatus {
+  ACTIVE
+  INACTIVE
+  DISCONTINUED
+}
+
+model ProductCategoryModel {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  slug        String    @unique
+  description String?
+  icon        String?
+  sortOrder   Int       @default(0)
+  isActive    Boolean   @default(true)
+  products    Product[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([slug])
+}
+
+model Product {
+  id               String               @id @default(cuid())
+  categoryId       String
+  sku              String               @unique
+  name             String
+  description      String?
+  retailPrice      Decimal              @db.Decimal(10, 2)
+  type             String
+  operator         String?
+  country          String?
+  currency         String               @default("GBP")
+  status           ProductStatus        @default(ACTIVE)
+  fulfillmentMode  String               @default("API")
+  category         ProductCategoryModel @relation(fields: [categoryId], references: [id])
+  providerProducts ProviderProduct[]
+  transactionItems TransactionItem[]
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  @@index([categoryId])
+  @@index([sku])
+  @@index([status])
+  @@index([type])
+}
+
+enum ProviderStatus {
+  ACTIVE
+  PAUSED
+  DISABLED
+}
+
+model Provider {
+  id                   String                @id @default(cuid())
+  name                 String                @unique
+  code                 String                @unique
+  description          String?
+  type                 String
+  status               ProviderStatus        @default(ACTIVE)
+  apiBaseUrl           String?
+  apiKey               String?
+  apiSecret            String?
+  webhookSecret        String?
+  successRate          Decimal?              @db.Decimal(5, 2)
+  avgResponseTime      Int?
+  products             ProviderProduct[]
+  providerTransactions ProviderTransaction[]
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+
+  @@index([code])
+  @@index([status])
+}
+
+model ProviderProduct {
+  id                  String   @id @default(cuid())
+  providerId          String
+  productId           String
+  providerProductCode String
+  buyingPrice         Decimal  @db.Decimal(10, 2)
+  retailPrice         Decimal  @db.Decimal(10, 2)
+  platformMargin      Decimal  @db.Decimal(10, 2)
+  retailerMargin      Decimal  @db.Decimal(10, 2)
+  isActive            Boolean  @default(true)
+  priority            Int      @default(100)
+  stockLevel          Int      @default(0)
+  provider            Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  product             Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([providerId, productId])
+  @@index([productId])
+  @@index([isActive])
+  @@index([priority])
+}
+
+enum PinStatus {
+  AVAILABLE
+  RESERVED
+  SOLD
+  EXPIRED
+  VOID
+  REFUNDED
+}
+
+model PinBatch {
+  id             String         @id @default(cuid())
+  batchCode      String         @unique
+  productId      String
+  uploadedBy     String
+  uploadedAt     DateTime       @default(now())
+  totalCount     Int
+  availableCount Int            @default(0)
+  soldCount      Int            @default(0)
+  buyingPrice    Decimal        @db.Decimal(10, 2)
+  expiryDate     DateTime?
+  pins           PinInventory[]
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([productId])
+  @@index([batchCode])
+}
+
+model PinInventory {
+  id            String    @id @default(cuid())
+  batchId       String
+  encryptedPin  String
+  pinHash       String    @unique
+  serialNumber  String?
+  status        PinStatus @default(AVAILABLE)
+  transactionId String?
+  soldAt        DateTime?
+  batch         PinBatch  @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([batchId])
+  @@index([status])
+  @@index([pinHash])
+  @@index([transactionId])
+}
+
+enum TransactionStatus {
+  CREATED
+  QUOTED
+  PENDING
+  SUCCESS
+  FAILED
+  REVERSED
+  REFUNDED
+}
+
+enum FulfilmentMode {
+  API_REALTIME
+  MANUAL_PIN
+  HYBRID
+}
+
+model Transaction {
+  id                  String              @id @default(cuid())
+  retailerId          String
+  outletId            String?
+  terminalId          String?
+  staffId             String?
+  reference           String              @unique
+  status              TransactionStatus   @default(CREATED)
+  totalAmount         Decimal             @db.Decimal(10, 2)
+  currency            String              @default("GBP")
+  retailerMargin      Decimal             @db.Decimal(10, 2)
+  platformMargin      Decimal             @db.Decimal(10, 2)
+  fulfilmentMode      FulfilmentMode
+  retailer            Retailer            @relation(fields: [retailerId], references: [id], onDelete: Cascade)
+  items               TransactionItem[]
+  providerTransaction ProviderTransaction?
+  receipt             Receipt?
+  auditLogs           AuditLog[]
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  completedAt         DateTime?
+
+  @@index([retailerId])
+  @@index([status])
+  @@index([reference])
+  @@index([createdAt])
+}
+
+model TransactionItem {
+  id                  String      @id @default(cuid())
+  transactionId       String
+  productId           String
+  providerId          String?
+  productName         String
+  productSku          String
+  retailPrice         Decimal     @db.Decimal(10, 2)
+  buyingPrice         Decimal     @db.Decimal(10, 2)
+  retailerMargin      Decimal     @db.Decimal(10, 2)
+  platformMargin      Decimal     @db.Decimal(10, 2)
+  quantity            Int         @default(1)
+  totalAmount         Decimal     @db.Decimal(10, 2)
+  providerName        String?
+  providerProductCode String?
+  routingDecision     Json?
+  transaction         Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  product             Product     @relation(fields: [productId], references: [id])
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  @@index([transactionId])
+  @@index([productId])
+}
+
+enum ProviderTransactionStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  TIMEOUT
+  REVERSED
+}
+
+model ProviderTransaction {
+  id                String                     @id @default(cuid())
+  transactionId     String                     @unique
+  providerId        String
+  providerReference String?
+  status            ProviderTransactionStatus  @default(PENDING)
+  requestPayload    Json?
+  responsePayload   Json?
+  errorMessage      String?
+  errorCode         String?
+  requestedAt       DateTime                   @default(now())
+  respondedAt       DateTime?
+  webhookPayload    Json?
+  webhookReceivedAt DateTime?
+  transaction       Transaction                @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  provider          Provider                   @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+
+  @@index([providerId])
+  @@index([status])
+  @@index([providerReference])
+}
+
+model Receipt {
+  id            String      @id @default(cuid())
+  transactionId String      @unique
+  receiptNumber String      @unique
+  receiptData   Json
+  printedAt     DateTime?
+  printedBy     String?
+  printCount    Int         @default(0)
+  emailedTo     String?
+  emailedAt     DateTime?
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([receiptNumber])
+}
+
+enum AuditAction {
+  USER_CREATED
+  USER_UPDATED
+  USER_DELETED
+  USER_LOGIN
+  USER_LOGOUT
+  RETAILER_CREATED
+  RETAILER_APPROVED
+  RETAILER_REJECTED
+  RETAILER_SUSPENDED
+  PRODUCT_CREATED
+  PRODUCT_UPDATED
+  PRODUCT_DELETED
+  PIN_BATCH_UPLOADED
+  PIN_REVEALED
+  PIN_SOLD
+  PIN_REPRINTED
+  PIN_VOIDED
+  TRANSACTION_CREATED
+  TRANSACTION_COMPLETED
+  TRANSACTION_FAILED
+  TRANSACTION_REFUNDED
+  TRANSACTION_REVERSED
+  WALLET_CREDITED
+  WALLET_DEBITED
+  WALLET_HOLD_PLACED
+  WALLET_HOLD_RELEASED
+  SETTINGS_UPDATED
+  PROVIDER_ENABLED
+  PROVIDER_DISABLED
+}
+
+model AuditLog {
+  id          String       @id @default(cuid())
+  userId      String?
+  retailerId  String?
+  action      AuditAction
+  entityType  String
+  entityId    String?
+  oldValue    Json?
+  newValue    Json?
+  metadata    Json?
+  ipAddress   String?
+  userAgent   String?
+  user        User?        @relation("AdminActions", fields: [userId], references: [id])
+  retailer    Retailer?    @relation(fields: [retailerId], references: [id])
+  transaction Transaction? @relation(fields: [entityId], references: [id])
+  createdAt   DateTime     @default(now())
+
+  @@index([userId])
+  @@index([retailerId])
+  @@index([action])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+enum WebhookStatus {
+  PENDING
+  DELIVERED
+  FAILED
+  RETRYING
+}
+
+model WebhookEvent {
+  id            String        @id @default(cuid())
+  eventType     String
+  provider      String?
+  payload       Json
+  status        WebhookStatus @default(PENDING)
+  endpoint      String?
+  attemptCount  Int           @default(0)
+  lastAttemptAt DateTime?
+  nextAttemptAt DateTime?
+  responseStatus Int?
+  responseBody  String?
+  errorMessage  String?
+  processedAt   DateTime?
+  processedBy   String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([eventType])
+  @@index([status])
+  @@index([provider])
+  @@index([createdAt])
+}
