@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { StripeCheckout } from '@/components/payment/StripeCheckout';
 import { 
   Wallet, 
   CreditCard, 
@@ -37,6 +38,7 @@ interface WalletData {
 
 export default function WalletPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [wallet, setWallet] = useState<WalletData | null>(null);
   const [loading, setLoading] = useState(true);
   const [topUpAmount, setTopUpAmount] = useState('');
@@ -46,7 +48,20 @@ export default function WalletPage() {
 
   useEffect(() => {
     fetchWallet();
-  }, []);
+    
+    // Check for Stripe redirect
+    const stripeSuccess = searchParams.get('success');
+    const stripeCanceled = searchParams.get('canceled');
+    
+    if (stripeSuccess === 'true') {
+      setSuccess('Payment successful! Your wallet has been topped up.');
+      // Clear URL params
+      router.replace('/retailer/wallet');
+    } else if (stripeCanceled === 'true') {
+      setError('Payment was canceled. Please try again.');
+      router.replace('/retailer/wallet');
+    }
+  }, [searchParams, router]);
 
   const fetchWallet = async () => {
     try {
@@ -193,18 +208,6 @@ export default function WalletPage() {
                   step="0.01"
                 />
               </div>
-              <Button
-                onClick={handleTopUp}
-                disabled={isProcessing}
-                className="h-12 px-8"
-              >
-                {isProcessing ? (
-                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                ) : (
-                  <ArrowUpRight className="w-4 h-4 mr-2" />
-                )}
-                {isProcessing ? 'Processing...' : 'Top Up'}
-              </Button>
             </div>
 
             {/* Quick amounts */}
@@ -219,6 +222,37 @@ export default function WalletPage() {
                   £{amount}
                 </Button>
               ))}
+            </div>
+
+            {/* Stripe Payment */}
+            <div className="mt-6">
+              <StripeCheckout
+                amount={parseFloat(topUpAmount) || 0}
+                retailerId="demo-retailer"
+                onSuccess={() => {
+                  setSuccess('Payment successful! Your wallet has been topped up.');
+                  setTopUpAmount('');
+                  fetchWallet();
+                }}
+                onError={(err) => setError(err)}
+              />
+            </div>
+
+            {/* Legacy Direct Top Up (optional) */}
+            <div className="mt-4">
+              <Button
+                onClick={handleTopUp}
+                disabled={isProcessing}
+                variant="outline"
+                className="w-full"
+              >
+                {isProcessing ? (
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                ) : (
+                  <ArrowUpRight className="w-4 h-4 mr-2" />
+                )}
+                {isProcessing ? 'Processing...' : 'Direct Top Up (Internal)'}
+              </Button>
             </div>
 
             {error && (
