@@ -12,7 +12,9 @@ import {
   Receipt,
   Users,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  Clock,
+  CheckCircle2
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -21,6 +23,7 @@ export const dynamic = 'force-dynamic';
 export default async function RetailerDashboardPage() {
   let session;
   let retailer;
+  let pendingRetailer;
   let error = '';
 
   try {
@@ -36,6 +39,7 @@ export default async function RetailerDashboardPage() {
   }
 
   try {
+    // First check for APPROVED retailer
     retailer = await prisma.retailer.findFirst({
       where: { 
         email: session.user.email,
@@ -55,6 +59,16 @@ export default async function RetailerDashboardPage() {
         },
       }
     });
+
+    // If no approved retailer, check for PENDING application
+    if (!retailer) {
+      pendingRetailer = await prisma.retailer.findFirst({
+        where: {
+          email: session.user.email,
+          status: 'PENDING',
+        },
+      });
+    }
   } catch (e: any) {
     console.error('Database error:', e);
     error = 'Unable to load retailer data. Please try again later.';
@@ -78,16 +92,85 @@ export default async function RetailerDashboardPage() {
     );
   }
 
+  // User has a PENDING application - show waiting screen
+  if (pendingRetailer && !retailer) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-zinc-100 p-4">
+        <Card className="w-full max-w-md text-center">
+          <CardHeader>
+            <CardTitle className="text-xl flex items-center justify-center gap-2">
+              <Clock className="w-5 h-5 text-amber-600" />
+              Application Pending Approval
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-zinc-600 mb-2">
+              Your retailer application for <strong>{pendingRetailer.businessName}</strong> has been submitted and is awaiting admin approval.
+            </p>
+            <p className="text-sm text-zinc-500 mb-4">
+              You will be able to access the dashboard once your application is approved.
+            </p>
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+              <p className="text-sm text-amber-800">
+                <strong>Status:</strong> Pending Approval
+              </p>
+              <p className="text-xs text-amber-600 mt-1">
+                Submitted on {new Date(pendingRetailer.createdAt).toLocaleDateString('en-GB')}
+              </p>
+            </div>
+            <Link href="/">
+              <Button variant="outline">Return to Home</Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // User has a REJECTED application
+  const rejectedRetailer = !retailer && !pendingRetailer ? await prisma.retailer.findFirst({
+    where: {
+      email: session.user.email,
+      status: 'REJECTED',
+    },
+  }) : null;
+
+  if (rejectedRetailer) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-zinc-100 p-4">
+        <Card className="w-full max-w-md text-center">
+          <CardHeader>
+            <CardTitle className="text-xl text-red-700">Application Rejected</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-zinc-600 mb-4">
+              Your retailer application for <strong>{rejectedRetailer.businessName}</strong> was not approved.
+            </p>
+            <p className="text-sm text-zinc-500 mb-4">
+              Please contact support for more information or submit a new application.
+            </p>
+            <div className="flex gap-2 justify-center">
+              <Link href="/retailer/onboard">
+                <Button>Apply Again</Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // No retailer at all - prompt to apply
   if (!retailer) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-zinc-100 p-4">
         <Card className="w-full max-w-md text-center">
           <CardHeader>
-            <CardTitle className="text-xl">No Approved Retailer Found</CardTitle>
+            <CardTitle className="text-xl">No Retailer Account Found</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-zinc-600 mb-4">
-              You don&apos;t have an approved retailer account yet.
+              You don&apos;t have a retailer account yet. Apply now to start selling digital value products.
             </p>
             <div className="flex gap-2 justify-center">
               <Link href="/retailer/onboard">
@@ -153,6 +236,7 @@ export default async function RetailerDashboardPage() {
           </div>
           <div className="flex items-center gap-2">
             <Badge variant="outline" className="bg-emerald-50 text-emerald-700">
+              <CheckCircle2 className="w-3 h-3 mr-1" />
               Approved
             </Badge>
             <Link href="/terminal">

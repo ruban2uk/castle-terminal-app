@@ -36,10 +36,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // Create audit log
+    // Audit log without userId to avoid FK errors with Neon Auth users
     await prisma.auditLog.create({
       data: {
-        userId: session.user.id,
         action: 'PIN_BATCH_UPLOADED',
         entityType: 'PinBatch',
         newValue: {

@@ -45,9 +45,12 @@ export default function Home() {
                 <span className="text-sm text-zinc-600">
                   Welcome, <strong>{session.user.name}</strong>
                 </span>
-                <Link href="/api/auth/sign-out">
-                  <Button variant="outline" size="sm">Sign Out</Button>
-                </Link>
+                <form action="/api/auth/sign-out" method="POST">
+                  <input type="hidden" name="callbackURL" value="/" />
+                  <Button type="submit" variant="outline" size="sm">
+                    Sign Out
+                  </Button>
+                </form>
               </div>
             ) : (
               <div className="flex gap-2">

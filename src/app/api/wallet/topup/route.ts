@@ -39,14 +39,12 @@ export async function POST(request: Request) {
       );
     }
 
-    // Create audit log
+    // Audit log without userId/entityId to avoid FK errors
     await prisma.auditLog.create({
       data: {
-        userId: session.user.id,
         retailerId,
         action: 'WALLET_CREDITED',
         entityType: 'Wallet',
-        entityId: result.ledgerEntry?.id,
         newValue: {
           amount,
           balance: result.wallet?.balance,

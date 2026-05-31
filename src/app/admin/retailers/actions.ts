@@ -42,13 +42,12 @@ export async function approveRetailer(formData: FormData): Promise<void> {
       });
     }
 
+    // Audit log without userId/entityId to avoid FK errors with Neon Auth users
     await prisma.auditLog.create({
       data: {
-        userId: session.user.id,
         retailerId: retailer.id,
         action: 'RETAILER_APPROVED',
         entityType: 'Retailer',
-        entityId: retailer.id,
         oldValue: { status: 'PENDING' },
         newValue: { status: 'APPROVED' },
       },
@@ -85,11 +84,9 @@ export async function rejectRetailer(formData: FormData): Promise<void> {
 
     await prisma.auditLog.create({
       data: {
-        userId: session.user.id,
         retailerId: retailer.id,
         action: 'RETAILER_REJECTED',
         entityType: 'Retailer',
-        entityId: retailer.id,
         oldValue: { status: 'PENDING' },
         newValue: { status: 'REJECTED' },
       },
@@ -125,11 +122,9 @@ export async function suspendRetailer(formData: FormData): Promise<void> {
 
     await prisma.auditLog.create({
       data: {
-        userId: session.user.id,
         retailerId: retailer.id,
         action: 'RETAILER_SUSPENDED',
         entityType: 'Retailer',
-        entityId: retailer.id,
         oldValue: { status: 'APPROVED' },
         newValue: { status: 'SUSPENDED' },
       },
