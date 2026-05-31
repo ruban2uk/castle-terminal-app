@@ -13,7 +13,7 @@ export default function SignInPage() {
 
   const handleGoogleSignIn = async () => {
     try {
-      await signInWithGoogle('/');
+      await signInWithGoogle('/retailer/dashboard');
     } catch (error) {
       // Error handled in the function
     }

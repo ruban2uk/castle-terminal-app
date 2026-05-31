@@ -1,11 +1,16 @@
 import { auth } from '@/lib/auth/server';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { redirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Home() {
   const { data: session } = await auth.getSession();
+
+  if (session?.user) {
+    redirect('/retailer/dashboard');
+  }
 
   return (
     <main className="min-h-screen bg-zinc-100 p-8">
