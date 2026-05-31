@@ -1,4 +1,5 @@
 import { auth } from '@/lib/auth/server';
+import { headers } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,7 +20,7 @@ import { approveRetailer, rejectRetailer, suspendRetailer } from './actions';
 export const dynamic = 'force-dynamic';
 
 export default async function AdminRetailersPage() {
-  const { data: session } = await auth.getSession();
+  const { data: session } = await auth.getSession({ headers: headers() });
 
   if (!session?.user) {
     redirect('/auth/sign-in');

@@ -1,5 +1,6 @@
 'use server';
 
+import { headers } from 'next/headers';
 import { auth } from '@/lib/auth/server';
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
@@ -9,19 +10,21 @@ export async function submitRetailerApplication(
   formData: FormData
 ) {
   try {
-    // Get current session
-    const { data: session } = await auth.getSession();
+    // Get current session using explicit headers from the current request
+    const { data: session } = await auth.getSession({ headers: headers() });
     
     if (!session?.user) {
       return { error: 'You must be logged in to submit a retailer application' };
     }
 
+    // Use the user's email as the retailer email to ensure dashboard lookup works
+    const userEmail = session.user.email;
+    
     // Extract form data
     const businessName = formData.get('businessName') as string;
     const tradingName = formData.get('tradingName') as string || null;
     const companyNumber = formData.get('companyNumber') as string || null;
     const vatNumber = formData.get('vatNumber') as string || null;
-    const email = formData.get('email') as string;
     const phone = formData.get('phone') as string;
     const addressLine1 = formData.get('addressLine1') as string;
     const addressLine2 = formData.get('addressLine2') as string || null;
@@ -30,27 +33,27 @@ export async function submitRetailerApplication(
     const country = formData.get('country') as string || 'GB';
 
     // Validate required fields
-    if (!businessName || !email || !phone || !addressLine1 || !city || !postcode) {
+    if (!businessName || !phone || !addressLine1 || !city || !postcode) {
       return { error: 'Please fill in all required fields' };
     }
 
-    // Check if retailer already exists with this email
+    // Check if retailer already exists with this user's email
     const existingRetailer = await prisma.retailer.findFirst({
-      where: { email },
+      where: { email: userEmail },
     });
 
     if (existingRetailer) {
       return { error: 'A retailer application with this email already exists' };
     }
 
-    // Create retailer application
+    // Create retailer application using the user's email
     const retailer = await prisma.retailer.create({
       data: {
         businessName,
         tradingName,
         companyNumber,
         vatNumber,
-        email,
+        email: userEmail,
         phone,
         addressLine1,
         addressLine2,
@@ -76,7 +79,7 @@ export async function submitRetailerApplication(
         retailerId: retailer.id,
         action: 'RETAILER_CREATED',
         entityType: 'Retailer',
-        newValue: { businessName, email, status: 'PENDING' },
+        newValue: { businessName, email: userEmail, status: 'PENDING' },
       },
     });
 

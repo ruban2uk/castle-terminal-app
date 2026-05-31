@@ -1,7 +1,8 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { authClient } from '@/lib/auth/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,6 +10,17 @@ import { submitRetailerApplication } from './actions';
 
 export default function RetailerOnboardPage() {
   const [state, action, isPending] = useActionState(submitRetailerApplication, null);
+  const [userEmail, setUserEmail] = useState<string>('');
+
+  useEffect(() => {
+    authClient.getSession().then((result: any) => {
+      if (result.data?.user?.email) {
+        setUserEmail(result.data.user.email);
+      }
+    }).catch(() => {
+      // Session not available
+    });
+  }, []);
 
   if (state?.success) {
     return (
@@ -79,8 +91,17 @@ export default function RetailerOnboardPage() {
                 <h3 className="text-lg font-semibold border-b pb-2">Contact Information</h3>
                 
                 <div>
-                  <label className="block text-sm font-medium mb-1">Business Email *</label>
-                  <Input name="email" type="email" required placeholder="business@example.com" />
+                  <label className="block text-sm font-medium mb-1">Business Email</label>
+                  <Input 
+                    value={userEmail} 
+                    readOnly 
+                    disabled 
+                    className="bg-zinc-50 text-zinc-500"
+                  />
+                  <input type="hidden" name="email" value={userEmail} />
+                  <p className="text-xs text-zinc-500 mt-1">
+                    Your account email is used as the retailer contact email
+                  </p>
                 </div>
                 
                 <div>
@@ -123,7 +144,7 @@ export default function RetailerOnboardPage() {
                 <p className="text-sm text-red-600 bg-red-50 p-3 rounded-lg">{state.error}</p>
               )}
 
-              <Button type="submit" className="w-full" disabled={isPending}>
+              <Button type="submit" className="w-full" disabled={isPending || !userEmail}>
                 {isPending ? 'Submitting Application...' : 'Submit Application'}
               </Button>
             </form>

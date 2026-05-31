@@ -1,12 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Mock must use factory function with no top-level variables
+// Mock next/headers
+vi.mock('next/headers', () => ({
+  headers: vi.fn(() => new Headers()),
+}));
+
+// Mock auth module
 vi.mock('@/lib/auth/server', () => ({
   auth: {
     getSession: vi.fn(),
   },
 }));
 
+// Mock prisma — must use factory function, no top-level vars
 vi.mock('@/lib/prisma', () => ({
   prisma: {
     retailer: {
@@ -31,6 +37,10 @@ import { auth } from '@/lib/auth/server';
 import { prisma } from '@/lib/prisma';
 
 describe('submitRetailerApplication', () => {
+  const mockRetailer = prisma.retailer as any;
+  const mockWallet = prisma.wallet as any;
+  const mockAuditLog = prisma.auditLog as any;
+
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -51,7 +61,6 @@ describe('submitRetailerApplication', () => {
 
     const formData = new FormData();
     formData.append('businessName', 'Test Business');
-    // Missing other required fields
 
     const result = await submitRetailerApplication(null, formData);
 
@@ -63,11 +72,10 @@ describe('submitRetailerApplication', () => {
       data: { user: { id: 'user-123', email: 'test@example.com' } },
     });
 
-    (prisma.retailer.findFirst as any).mockResolvedValue({ id: 'existing-retailer' });
+    mockRetailer.findFirst.mockResolvedValue({ id: 'existing-retailer' });
 
     const formData = new FormData();
     formData.append('businessName', 'Test Business');
-    formData.append('email', 'test@example.com');
     formData.append('phone', '+44 123 456 7890');
     formData.append('addressLine1', '123 Test St');
     formData.append('city', 'London');
@@ -78,23 +86,22 @@ describe('submitRetailerApplication', () => {
     expect(result.error).toBe('A retailer application with this email already exists');
   });
 
-  it('should successfully create retailer, wallet, and audit log WITHOUT entityId to avoid FK error', async () => {
+  it('should successfully create retailer, wallet, and audit log WITHOUT entityId', async () => {
     (auth.getSession as any).mockResolvedValue({
       data: { user: { id: 'user-123', email: 'test@example.com' } },
     });
 
-    (prisma.retailer.findFirst as any).mockResolvedValue(null);
-    (prisma.retailer.create as any).mockResolvedValue({
+    mockRetailer.findFirst.mockResolvedValue(null);
+    mockRetailer.create.mockResolvedValue({
       id: 'retailer-123',
       businessName: 'Test Business',
       email: 'test@example.com',
     });
-    (prisma.wallet.create as any).mockResolvedValue({ id: 'wallet-123' });
-    (prisma.auditLog.create as any).mockResolvedValue({ id: 'audit-123' });
+    mockWallet.create.mockResolvedValue({ id: 'wallet-123' });
+    mockAuditLog.create.mockResolvedValue({ id: 'audit-123' });
 
     const formData = new FormData();
     formData.append('businessName', 'Test Business');
-    formData.append('email', 'test@example.com');
     formData.append('phone', '+44 123 456 7890');
     formData.append('addressLine1', '123 Test St');
     formData.append('city', 'London');
@@ -103,14 +110,14 @@ describe('submitRetailerApplication', () => {
     const result = await submitRetailerApplication(null, formData);
 
     expect(result.success).toBe(true);
-    expect(prisma.retailer.create).toHaveBeenCalledWith({
+    expect(mockRetailer.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         businessName: 'Test Business',
         email: 'test@example.com',
         status: 'PENDING',
       }),
     });
-    expect(prisma.wallet.create).toHaveBeenCalledWith({
+    expect(mockWallet.create).toHaveBeenCalledWith({
       data: {
         retailerId: 'retailer-123',
         balance: 0,
@@ -118,8 +125,7 @@ describe('submitRetailerApplication', () => {
       },
     });
     
-    // THE KEY FIX: auditLog.create should NOT include entityId
-    const auditLogCall = (prisma.auditLog.create as any).mock.calls[0][0];
+    const auditLogCall = mockAuditLog.create.mock.calls[0][0];
     expect(auditLogCall.data).toEqual(expect.objectContaining({
       retailerId: 'retailer-123',
       action: 'RETAILER_CREATED',
@@ -134,11 +140,10 @@ describe('submitRetailerApplication', () => {
       data: { user: { id: 'user-123', email: 'test@example.com' } },
     });
 
-    (prisma.retailer.findFirst as any).mockRejectedValue(new Error('Database connection failed'));
+    mockRetailer.findFirst.mockRejectedValue(new Error('Database connection failed'));
 
     const formData = new FormData();
     formData.append('businessName', 'Test Business');
-    formData.append('email', 'test@example.com');
     formData.append('phone', '+44 123 456 7890');
     formData.append('addressLine1', '123 Test St');
     formData.append('city', 'London');

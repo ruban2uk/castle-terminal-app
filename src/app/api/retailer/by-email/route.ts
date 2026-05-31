@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   try {
-    const { data: session } = await auth.getSession();
+    const { data: session } = await auth.getSession({ headers: request.headers });
 
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -19,7 +19,6 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Email required' }, { status: 400 });
     }
 
-    // Look up retailers by this email in all statuses
     const [approved, pending, rejected] = await Promise.all([
       prisma.retailer.findFirst({
         where: { email, status: 'APPROVED' },
