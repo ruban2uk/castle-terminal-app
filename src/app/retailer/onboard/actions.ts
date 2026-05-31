@@ -85,8 +85,9 @@ export async function submitRetailerApplication(
     revalidatePath('/admin/retailers');
     
     return { success: true };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Retailer application error:', error);
-    return { error: 'Failed to submit application. Please try again.' };
+    const message = error?.message || String(error);
+    return { error: `Failed to submit application: ${message}` };
   }
 }
