@@ -1,9 +1,12 @@
-import { auth } from '@/lib/auth/server';
-import { prisma } from '@/lib/prisma';
-import { redirect } from 'next/navigation';
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { authClient } from '@/lib/auth/client';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { 
   Wallet, 
   TrendingUp, 
@@ -14,85 +17,122 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Clock,
-  CheckCircle2
+  CheckCircle2,
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
-import Link from 'next/link';
 
-export const dynamic = 'force-dynamic';
+interface SessionUser {
+  id: string;
+  email: string;
+  name?: string;
+}
 
-export default async function RetailerDashboardPage() {
-  let session;
-  let retailer;
-  let pendingRetailer;
-  let error = '';
+interface RetailerData {
+  id: string;
+  businessName: string;
+  status: string;
+  createdAt: string;
+  wallet?: { balance: number; holdAmount: number } | null;
+  outlets: any[];
+  transactions: any[];
+}
 
-  try {
-    const result = await auth.getSession();
-    session = result.data;
-  } catch (e: any) {
-    console.error('Auth session error:', e);
-    error = 'Unable to verify login session. Please sign in again.';
-  }
+export default function RetailerDashboardPage() {
+  const router = useRouter();
+  const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
+  const [retailer, setRetailer] = useState<RetailerData | null>(null);
+  const [pendingRetailer, setPendingRetailer] = useState<any>(null);
+  const [rejectedRetailer, setRejectedRetailer] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  if (!session?.user) {
-    redirect('/auth/sign-in');
-  }
+  useEffect(() => {
+    let cancelled = false;
 
-  try {
-    // First check for APPROVED retailer
-    retailer = await prisma.retailer.findFirst({
-      where: { 
-        email: session.user.email,
-        status: 'APPROVED'
-      },
-      include: {
-        wallet: true,
-        outlets: {
-          include: {
-            staff: true,
-            terminals: true,
+    async function init() {
+      try {
+        const sessionResult = await authClient.getSession() as any;
+        const session = sessionResult?.data;
+
+        if (cancelled) return;
+
+        if (!session?.user) {
+          window.location.href = '/auth/sign-in';
+          return;
+        }
+
+        setSessionUser(session.user);
+
+        // Fetch retailer data
+        try {
+          const res = await fetch(`/api/retailer/by-email?email=${encodeURIComponent(session.user.email)}`);
+          const data = await res.json();
+          if (cancelled) return;
+
+          if (data.approved) {
+            setRetailer(data.approved);
+          } else if (data.pending) {
+            setPendingRetailer(data.pending);
+          } else if (data.rejected) {
+            setRejectedRetailer(data.rejected);
           }
-        },
-        transactions: {
-          orderBy: { createdAt: 'desc' },
-          take: 5,
-        },
+        } catch (fetchErr: any) {
+          if (!cancelled) setError('Failed to load retailer data');
+        }
+      } catch (sessionErr: any) {
+        if (!cancelled) {
+          setError('Failed to verify session');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-    });
-
-    // If no approved retailer, check for PENDING application
-    if (!retailer) {
-      pendingRetailer = await prisma.retailer.findFirst({
-        where: {
-          email: session.user.email,
-          status: 'PENDING',
-        },
-      });
     }
-  } catch (e: any) {
-    console.error('Database error:', e);
-    error = 'Unable to load retailer data. Please try again later.';
+
+    init();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-zinc-100">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3" />
+          <p className="text-zinc-500">Loading dashboard...</p>
+        </div>
+      </div>
+    );
   }
 
+  // Error state
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-zinc-100 p-4">
         <Card className="w-full max-w-md text-center">
           <CardHeader>
-            <CardTitle className="text-xl text-red-700">Error</CardTitle>
+            <CardTitle className="text-xl flex items-center justify-center gap-2 text-red-700">
+              <AlertCircle className="w-5 h-5" />
+              Error
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-zinc-600 mb-4">{error}</p>
-            <Link href="/auth/sign-in">
-              <Button>Sign In</Button>
-            </Link>
+            <div className="flex gap-2 justify-center">
+              <Button onClick={() => window.location.href = '/auth/sign-in'}>
+                Sign In
+              </Button>
+              <Button variant="outline" onClick={() => window.location.reload()}>
+                Retry
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
     );
   }
 
-  // User has a PENDING application - show waiting screen
+  // Application Pending
   if (pendingRetailer && !retailer) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-zinc-100 p-4">
@@ -107,13 +147,8 @@ export default async function RetailerDashboardPage() {
             <p className="text-zinc-600 mb-2">
               Your retailer application for <strong>{pendingRetailer.businessName}</strong> has been submitted and is awaiting admin approval.
             </p>
-            <p className="text-sm text-zinc-500 mb-4">
-              You will be able to access the dashboard once your application is approved.
-            </p>
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
-              <p className="text-sm text-amber-800">
-                <strong>Status:</strong> Pending Approval
-              </p>
+              <p className="text-sm text-amber-800 font-medium">Status: Pending Approval</p>
               <p className="text-xs text-amber-600 mt-1">
                 Submitted on {new Date(pendingRetailer.createdAt).toLocaleDateString('en-GB')}
               </p>
@@ -127,15 +162,8 @@ export default async function RetailerDashboardPage() {
     );
   }
 
-  // User has a REJECTED application
-  const rejectedRetailer = !retailer && !pendingRetailer ? await prisma.retailer.findFirst({
-    where: {
-      email: session.user.email,
-      status: 'REJECTED',
-    },
-  }) : null;
-
-  if (rejectedRetailer) {
+  // Application Rejected
+  if (rejectedRetailer && !retailer) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-zinc-100 p-4">
         <Card className="w-full max-w-md text-center">
@@ -145,9 +173,6 @@ export default async function RetailerDashboardPage() {
           <CardContent>
             <p className="text-zinc-600 mb-4">
               Your retailer application for <strong>{rejectedRetailer.businessName}</strong> was not approved.
-            </p>
-            <p className="text-sm text-zinc-500 mb-4">
-              Please contact support for more information or submit a new application.
             </p>
             <div className="flex gap-2 justify-center">
               <Link href="/retailer/onboard">
@@ -160,7 +185,7 @@ export default async function RetailerDashboardPage() {
     );
   }
 
-  // No retailer at all - prompt to apply
+  // No retailer
   if (!retailer) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-zinc-100 p-4">
@@ -183,12 +208,12 @@ export default async function RetailerDashboardPage() {
     );
   }
 
-  // Calculate stats
-  const totalSales = retailer.transactions.reduce((sum, t) => sum + Number(t.totalAmount), 0);
-  const totalMargin = retailer.transactions.reduce((sum, t) => sum + Number(t.retailerMargin), 0);
+  // Approved retailer - show full dashboard
+  const totalSales = retailer.transactions?.reduce((sum: number, t: any) => sum + Number(t.totalAmount), 0) || 0;
+  const totalMargin = retailer.transactions?.reduce((sum: number, t: any) => sum + Number(t.retailerMargin), 0) || 0;
   const todaySales = retailer.transactions
-    .filter(t => new Date(t.createdAt).toDateString() === new Date().toDateString())
-    .reduce((sum, t) => sum + Number(t.totalAmount), 0);
+    ?.filter((t: any) => new Date(t.createdAt).toDateString() === new Date().toDateString())
+    .reduce((sum: number, t: any) => sum + Number(t.totalAmount), 0) || 0;
 
   const stats = [
     {
@@ -196,7 +221,6 @@ export default async function RetailerDashboardPage() {
       value: `£${Number(retailer.wallet?.balance || 0).toFixed(2)}`,
       icon: Wallet,
       trend: 'Available for sales',
-      trendUp: true,
       color: 'bg-blue-50 text-blue-700',
     },
     {
@@ -204,7 +228,6 @@ export default async function RetailerDashboardPage() {
       value: `£${totalSales.toFixed(2)}`,
       icon: ShoppingCart,
       trend: 'All time sales',
-      trendUp: true,
       color: 'bg-emerald-50 text-emerald-700',
     },
     {
@@ -212,7 +235,6 @@ export default async function RetailerDashboardPage() {
       value: `£${todaySales.toFixed(2)}`,
       icon: TrendingUp,
       trend: 'Today\'s revenue',
-      trendUp: todaySales > 0,
       color: 'bg-amber-50 text-amber-700',
     },
     {
@@ -220,7 +242,6 @@ export default async function RetailerDashboardPage() {
       value: `£${totalMargin.toFixed(2)}`,
       icon: Receipt,
       trend: 'Your earnings',
-      trendUp: true,
       color: 'bg-purple-50 text-purple-700',
     },
   ];
@@ -235,7 +256,7 @@ export default async function RetailerDashboardPage() {
             <p className="text-zinc-600 mt-1">Retailer Dashboard</p>
           </div>
           <div className="flex items-center gap-2">
-            <Badge variant="outline" className="bg-emerald-50 text-emerald-700">
+            <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200">
               <CheckCircle2 className="w-3 h-3 mr-1" />
               Approved
             </Badge>
@@ -259,16 +280,7 @@ export default async function RetailerDashboardPage() {
                     <div>
                       <p className="text-sm text-zinc-500">{stat.title}</p>
                       <p className="text-2xl font-bold mt-1">{stat.value}</p>
-                      <div className="flex items-center gap-1 mt-2 text-xs">
-                        {stat.trendUp ? (
-                          <ArrowUpRight className="w-3 h-3 text-emerald-600" />
-                        ) : (
-                          <ArrowDownRight className="w-3 h-3 text-zinc-400" />
-                        )}
-                        <span className={stat.trendUp ? 'text-emerald-600' : 'text-zinc-500'}>
-                          {stat.trend}
-                        </span>
-                      </div>
+                      <p className="text-xs text-zinc-500 mt-2">{stat.trend}</p>
                     </div>
                     <div className={`p-3 rounded-xl ${stat.color}`}>
                       <Icon className="w-5 h-5" />
@@ -280,29 +292,23 @@ export default async function RetailerDashboardPage() {
           })}
         </div>
 
-        {/* Outlets & Staff */}
+        {/* Outlets & Transactions */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           <Card>
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <Store className="w-5 h-5" />
-                Outlets ({retailer.outlets.length})
+                Outlets ({retailer.outlets?.length || 0})
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {retailer.outlets.length > 0 ? (
+              {retailer.outlets?.length > 0 ? (
                 <div className="space-y-3">
-                  {retailer.outlets.map((outlet) => (
+                  {retailer.outlets.map((outlet: any) => (
                     <div key={outlet.id} className="flex justify-between items-center p-3 bg-zinc-50 rounded-lg">
                       <div>
                         <p className="font-medium">{outlet.name}</p>
                         <p className="text-sm text-zinc-500">{outlet.city}, {outlet.postcode}</p>
-                      </div>
-                      <div className="flex gap-2 text-sm text-zinc-500">
-                        <span className="flex items-center gap-1">
-                          <Users className="w-4 h-4" />
-                          {outlet.staff.length}
-                        </span>
                       </div>
                     </div>
                   ))}
@@ -321,9 +327,9 @@ export default async function RetailerDashboardPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {retailer.transactions.length > 0 ? (
+              {retailer.transactions?.length > 0 ? (
                 <div className="space-y-3">
-                  {retailer.transactions.map((txn) => (
+                  {retailer.transactions.map((txn: any) => (
                     <div key={txn.id} className="flex justify-between items-center p-3 bg-zinc-50 rounded-lg">
                       <div>
                         <p className="font-medium text-sm">{txn.reference}</p>
@@ -333,9 +339,7 @@ export default async function RetailerDashboardPage() {
                       </div>
                       <div className="text-right">
                         <p className="font-semibold">£{Number(txn.totalAmount).toFixed(2)}</p>
-                        <Badge variant="outline" className="text-xs">
-                          {txn.status}
-                        </Badge>
+                        <Badge variant="outline" className="text-xs">{txn.status}</Badge>
                       </div>
                     </div>
                   ))}
@@ -356,26 +360,22 @@ export default async function RetailerDashboardPage() {
             <div className="flex flex-wrap gap-3">
               <Link href="/terminal">
                 <Button variant="outline" className="gap-2">
-                  <Store className="w-4 h-4" />
-                  Open POS Terminal
+                  <Store className="w-4 h-4" /> Open POS Terminal
                 </Button>
               </Link>
               <Link href="/retailer/wallet">
                 <Button variant="outline" className="gap-2">
-                  <Wallet className="w-4 h-4" />
-                  Top Up Wallet
+                  <Wallet className="w-4 h-4" /> Top Up Wallet
                 </Button>
               </Link>
               <Link href="/retailer/transactions">
                 <Button variant="outline" className="gap-2">
-                  <Receipt className="w-4 h-4" />
-                  View All Transactions
+                  <Receipt className="w-4 h-4" /> View All Transactions
                 </Button>
               </Link>
               <Link href="/retailer/staff">
                 <Button variant="outline" className="gap-2">
-                  <Users className="w-4 h-4" />
-                  Manage Staff
+                  <Users className="w-4 h-4" /> Manage Staff
                 </Button>
               </Link>
             </div>
