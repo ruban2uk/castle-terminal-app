@@ -1,7 +1,5 @@
 'use server';
 
-import { headers } from 'next/headers';
-import { auth } from '@/lib/auth/server';
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 
@@ -10,15 +8,8 @@ export async function submitRetailerApplication(
   formData: FormData
 ) {
   try {
-    // Get current session using explicit headers from the current request
-    const { data: session } = await auth.getSession({ headers: headers() });
-    
-    if (!session?.user) {
-      return { error: 'You must be logged in to submit a retailer application' };
-    }
-
-    // Use the user's email as the retailer email to ensure dashboard lookup works
-    const userEmail = session.user.email;
+    // Use the email provided by the client (pre-filled from authClient.getSession())
+    const userEmail = formData.get('email') as string;
     
     // Extract form data
     const businessName = formData.get('businessName') as string;
@@ -35,6 +26,10 @@ export async function submitRetailerApplication(
     // Validate required fields
     if (!businessName || !phone || !addressLine1 || !city || !postcode) {
       return { error: 'Please fill in all required fields' };
+    }
+
+    if (!userEmail) {
+      return { error: 'Email is required. Please sign in again.' };
     }
 
     // Check if retailer already exists with this user's email
