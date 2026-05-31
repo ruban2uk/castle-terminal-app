@@ -1,13 +1,12 @@
 'use server';
 
 import { auth } from '@/lib/auth/server';
-import { headers } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 
 export async function approveRetailer(formData: FormData): Promise<void> {
   try {
-    const { data: session } = await auth.getSession({ headers: headers() });
+    const { data: session } = await auth.getSession();
     
     if (!session?.user) {
       throw new Error('Unauthorized');
@@ -63,7 +62,7 @@ export async function approveRetailer(formData: FormData): Promise<void> {
 
 export async function rejectRetailer(formData: FormData): Promise<void> {
   try {
-    const { data: session } = await auth.getSession({ headers: headers() });
+    const { data: session } = await auth.getSession();
     
     if (!session?.user) {
       throw new Error('Unauthorized');
@@ -102,7 +101,7 @@ export async function rejectRetailer(formData: FormData): Promise<void> {
 
 export async function suspendRetailer(formData: FormData): Promise<void> {
   try {
-    const { data: session } = await auth.getSession({ headers: headers() });
+    const { data: session } = await auth.getSession();
     
     if (!session?.user) {
       throw new Error('Unauthorized');
