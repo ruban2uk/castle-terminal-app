@@ -19,32 +19,64 @@ import Link from 'next/link';
 export const dynamic = 'force-dynamic';
 
 export default async function RetailerDashboardPage() {
-  const { data: session } = await auth.getSession();
+  let session;
+  let retailer;
+  let error = '';
+
+  try {
+    const result = await auth.getSession();
+    session = result.data;
+  } catch (e: any) {
+    console.error('Auth session error:', e);
+    error = 'Unable to verify login session. Please sign in again.';
+  }
 
   if (!session?.user) {
     redirect('/auth/sign-in');
   }
 
-  // Find retailer by user email
-  const retailer = await prisma.retailer.findFirst({
-    where: { 
-      email: session.user.email,
-      status: 'APPROVED'
-    },
-    include: {
-      wallet: true,
-      outlets: {
-        include: {
-          staff: true,
-          terminals: true,
-        }
+  try {
+    retailer = await prisma.retailer.findFirst({
+      where: { 
+        email: session.user.email,
+        status: 'APPROVED'
       },
-      transactions: {
-        orderBy: { createdAt: 'desc' },
-        take: 5,
-      },
-    }
-  });
+      include: {
+        wallet: true,
+        outlets: {
+          include: {
+            staff: true,
+            terminals: true,
+          }
+        },
+        transactions: {
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+        },
+      }
+    });
+  } catch (e: any) {
+    console.error('Database error:', e);
+    error = 'Unable to load retailer data. Please try again later.';
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-zinc-100 p-4">
+        <Card className="w-full max-w-md text-center">
+          <CardHeader>
+            <CardTitle className="text-xl text-red-700">Error</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-zinc-600 mb-4">{error}</p>
+            <Link href="/auth/sign-in">
+              <Button>Sign In</Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (!retailer) {
     return (
@@ -55,7 +87,7 @@ export default async function RetailerDashboardPage() {
           </CardHeader>
           <CardContent>
             <p className="text-zinc-600 mb-4">
-              You don't have an approved retailer account yet.
+              You don&apos;t have an approved retailer account yet.
             </p>
             <div className="flex gap-2 justify-center">
               <Link href="/retailer/onboard">

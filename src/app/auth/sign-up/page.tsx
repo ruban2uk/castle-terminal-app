@@ -15,10 +15,9 @@ export default function SignUpPage() {
 
   useEffect(() => {
     if (state?.success) {
-      router.push('/retailer/dashboard');
-      router.refresh();
+      window.location.href = '/retailer/dashboard';
     }
-  }, [state, router]);
+  }, [state]);
 
   const handleGoogleSignUp = async () => {
     try {

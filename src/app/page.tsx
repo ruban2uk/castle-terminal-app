@@ -1,15 +1,34 @@
-import { auth } from '@/lib/auth/server';
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { redirect } from 'next/navigation';
+import { authClient } from '@/lib/auth/client';
 
-export const dynamic = 'force-dynamic';
+export default function Home() {
+  const router = useRouter();
+  const [session, setSession] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
-export default async function Home() {
-  const { data: session } = await auth.getSession();
+  useEffect(() => {
+    authClient.getSession().then((result: any) => {
+      setSession(result.data);
+      setLoading(false);
+      if (result.data?.user) {
+        router.push('/retailer/dashboard');
+      }
+    }).catch(() => {
+      setLoading(false);
+    });
+  }, [router]);
 
-  if (session?.user) {
-    redirect('/retailer/dashboard');
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-zinc-100 flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-zinc-200 border-t-zinc-950 rounded-full animate-spin" />
+      </main>
+    );
   }
 
   return (
@@ -26,11 +45,9 @@ export default async function Home() {
                 <span className="text-sm text-zinc-600">
                   Welcome, <strong>{session.user.name}</strong>
                 </span>
-                <form action="/api/auth/sign-out" method="POST">
-                  <Button type="submit" variant="outline" size="sm">
-                    Sign Out
-                  </Button>
-                </form>
+                <Link href="/api/auth/sign-out">
+                  <Button variant="outline" size="sm">Sign Out</Button>
+                </Link>
               </div>
             ) : (
               <div className="flex gap-2">
@@ -48,17 +65,14 @@ export default async function Home() {
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-8">
           <div>
             <h2 className="text-lg font-semibold mb-4 text-center">1. Terminal Login</h2>
-            {/* TerminalLogin component */}
           </div>
           
           <div>
             <h2 className="text-lg font-semibold mb-4 text-center">2. Terminal Home</h2>
-            {/* TerminalHome component */}
           </div>
           
           <div>
             <h2 className="text-lg font-semibold mb-4 text-center">3. Product Search</h2>
-            {/* ProductSearch component */}
           </div>
         </div>
       </div>

@@ -1,14 +1,13 @@
 'use client';
 
 import { useActionState } from 'react';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { submitRetailerApplication } from './actions';
 
 export default function RetailerOnboardPage() {
-  const router = useRouter();
   const [state, action, isPending] = useActionState(submitRetailerApplication, null);
 
   if (state?.success) {
@@ -25,12 +24,11 @@ export default function RetailerOnboardPage() {
             <p className="text-sm text-zinc-500">
               You will receive an email notification once your account is approved.
             </p>
-            <Button 
-              className="mt-6" 
-              onClick={() => router.push('/')}
-            >
-              Return to Home
-            </Button>
+            <Link href="/retailer/dashboard">
+              <Button className="mt-6">
+                Go to Dashboard
+              </Button>
+            </Link>
           </CardContent>
         </Card>
       </div>
