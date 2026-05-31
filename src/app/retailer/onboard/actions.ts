@@ -70,13 +70,12 @@ export async function submitRetailerApplication(
       },
     });
 
-    // Create audit log (skip userId link since Neon Auth users may not exist in Prisma User table yet)
+    // Create audit log (skip userId and entityId to avoid FK issues)
     await prisma.auditLog.create({
       data: {
         retailerId: retailer.id,
         action: 'RETAILER_CREATED',
         entityType: 'Retailer',
-        entityId: retailer.id,
         newValue: { businessName, email, status: 'PENDING' },
       },
     });

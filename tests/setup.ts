@@ -4,24 +4,27 @@ import { PrismaClient } from '@prisma/client';
 
 const testConnectionString = process.env.DATABASE_URL;
 
-if (!testConnectionString) {
-  throw new Error('DATABASE_URL environment variable is not set for tests');
+// Only connect to real DB if DATABASE_URL is provided (integration tests)
+// Unit tests that mock prisma don't need this
+let prisma: PrismaClient | null = null;
+
+if (testConnectionString) {
+  const adapter = new PrismaNeon({ connectionString: testConnectionString });
+  prisma = new PrismaClient({ adapter });
 }
-
-const adapter = new PrismaNeon({ connectionString: testConnectionString });
-
-// Create test Prisma client
-const prisma = new PrismaClient({ adapter });
 
 // Global test setup
 beforeAll(async () => {
-  // Ensure database is connected
-  await prisma.$connect();
+  if (prisma) {
+    await prisma.$connect();
+  }
 });
 
 // Global test teardown
 afterAll(async () => {
-  await prisma.$disconnect();
+  if (prisma) {
+    await prisma.$disconnect();
+  }
 });
 
 // Export for use in tests
