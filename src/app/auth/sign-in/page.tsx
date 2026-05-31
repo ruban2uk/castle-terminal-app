@@ -1,6 +1,7 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { signInWithEmail } from './actions';
 import { signInWithGoogle } from '@/lib/auth/client';
 import { Button } from '@/components/ui/button';
@@ -9,7 +10,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import Link from 'next/link';
 
 export default function SignInPage() {
+  const router = useRouter();
   const [state, action, isPending] = useActionState(signInWithEmail, null);
+
+  useEffect(() => {
+    if (state?.success) {
+      router.push('/retailer/dashboard');
+      router.refresh();
+    }
+  }, [state, router]);
 
   const handleGoogleSignIn = async () => {
     try {

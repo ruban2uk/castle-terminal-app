@@ -1,10 +1,9 @@
 'use server';
 
 import { auth } from '@/lib/auth/server';
-import { redirect } from 'next/navigation';
 
 export async function signInWithEmail(
-  _prevState: { error: string } | null,
+  _prevState: { error?: string; success?: boolean } | null,
   formData: FormData
 ) {
   const { error } = await auth.signIn.email({
@@ -16,5 +15,5 @@ export async function signInWithEmail(
     return { error: error.message || 'Failed to sign in. Try again' };
   }
 
-  redirect('/retailer/dashboard');
+  return { success: true };
 }
